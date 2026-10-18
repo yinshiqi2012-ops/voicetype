@@ -20,6 +20,9 @@ final class Recorder {
 
     private(set) var isRecording = false
 
+    /// 录音电平回调（0…1，约每 85ms 一次）。在音频线程触发，不要在里面做 UI 之外的重活。
+    var onLevel: ((Float) -> Void)?
+
     func start() throws {
         guard !isRecording else { return }
 
@@ -60,6 +63,10 @@ final class Recorder {
             self.lock.lock()
             self.captured.append(copy)
             self.lock.unlock()
+            // 电平用于驱动录音指示胶囊；回调在音频线程上，实现方自行切主线程。
+            if let onLevel = self.onLevel, let channels = buffer.floatChannelData {
+                onLevel(Self.level(channels[0], count: Int(buffer.frameLength)))
+            }
         }
 
         engine.prepare()
@@ -137,6 +144,19 @@ final class Recorder {
         file = nil
         inputFormat = nil
         destination = nil
+    }
+
+    /// RMS → dB → 归一化到 0…1（-50dB 视作静音，0dB 视作满刻度）。
+    private static func level(_ samples: UnsafePointer<Float>, count: Int) -> Float {
+        guard count > 0 else { return 0 }
+        var sum: Float = 0
+        for index in 0..<count {
+            let value = samples[index]
+            sum += value * value
+        }
+        let rms = (sum / Float(count)).squareRoot()
+        let decibels = 20 * log10(max(rms, 1e-7))
+        return max(0, min(1, (decibels + 50) / 50))
     }
 
     private static func copyOf(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {

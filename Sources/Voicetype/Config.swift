@@ -6,8 +6,9 @@ import Foundation
 /// 覆盖模型；识别语言默认固定为 `zh`，`defaults write com.truman.voicetype language ""`
 /// 可恢复自动检测。
 enum Config {
-    /// 按住说话的热键：右 Option（virtual keycode 61）。
-    static let pushToTalkKeyCode: Int64 = 61
+    /// 录音热键：Option + Command 同时按下触发一次，再按一次结束。
+    /// 具体按键识别在 `HotKeyMonitor`（按修饰键 flags 判断，左右 Option/Command 都可以）。
+    /// 用组合键而不是单键，是为了避开单独按 Option 时与系统快捷键、输入法冲突。
 
     /// 默认模型。首次运行会从 HuggingFace 下载到 `Models` 目录。
     static let defaultModel = "openai_whisper-small"

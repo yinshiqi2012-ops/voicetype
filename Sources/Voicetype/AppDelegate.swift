@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let pipeline = Logger(subsystem: "com.truman.voicetype", category: "pipeline")
     private let transcriber = Transcriber()
     private let recorder = Recorder()
+    private let capsule = ListeningCapsule()
     private let polisher = SpeechPolisher()
     private var monitor: HotKeyMonitor?
 
@@ -42,6 +43,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         requestMissingPermissions()
         warmUpModel()
         warmUpPolisher()
+        wireCapsule()
+
+        if ProcessInfo.processInfo.environment["VOICETYPE_PREVIEW_CAPSULE"] == "1" {
+            capsule.show(.listening)
+            capsule.hide(after: 5)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -62,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func setUpStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "voicetype")
-        item.button?.toolTip = "voicetype：按住右 Option 说话"
+        item.button?.toolTip = "voicetype：按 Option+Command 开始/结束说话"
 
         let menu = NSMenu()
         menu.delegate = self
@@ -212,7 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             state = lastError
             symbol = "exclamationmark.triangle"
         } else if recording {
-            state = "正在录音…（松开右 Option 结束）"
+            state = "正在录音…（再按 Option+Command 结束）"
             symbol = "mic.fill"
         } else if isPolishing {
             state = Config.polishMode == .summary ? "正在总结…" : "正在整理…"
@@ -227,7 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             state = statusNote
             symbol = "quote.bubble"
         } else {
-            state = "就绪，按住右 Option 说话"
+            state = "就绪，按 Option+Command 说话"
             symbol = "mic"
         }
         statusLine?.title = "状态：" + state
@@ -293,9 +300,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func hintTitle() -> String {
         switch Config.polishMode {
-        case .off: "按住右 Option 说话，松开即转写并插入"
-        case .clean: "按住右 Option 说话，松开后整理并插入"
-        case .summary: "按住右 Option 说话，松开后总结并插入"
+        case .off: "按 Option+Command 说话，再按一次即转写并插入"
+        case .clean: "按 Option+Command 说话，再按一次整理并插入"
+        case .summary: "按 Option+Command 说话，再按一次总结并插入"
         }
     }
 
@@ -365,14 +372,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - 热键
 
     private func setUpHotKey() {
-        let monitor = HotKeyMonitor(
-            onDown: { [weak self] in
-                MainActor.assumeIsolated { self?.handlePushToTalkStart() }
-            },
-            onUp: { [weak self] in
-                MainActor.assumeIsolated { self?.handlePushToTalkEnd() }
-            }
-        )
+        let monitor = HotKeyMonitor { [weak self] in
+            MainActor.assumeIsolated { self?.handleHotKeyToggle() }
+        }
         guard monitor.start() else {
             lastError = "无法监听键盘事件，请在系统设置中开启「输入监控」权限"
             refreshStatusLine()
@@ -382,9 +384,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshStatusLine()
     }
 
-    private func handlePushToTalkStart() {
-        pipeline.notice("hotkey down: transcribing=\(self.isTranscribing, privacy: .public) recording=\(self.recorder.isRecording, privacy: .public)")
-        guard !isTranscribing, !recorder.isRecording else { return }
+    /// Option+Command 每按一次调用一次：没在录音就开始，正在录音就结束。
+    private func handleHotKeyToggle() {
+        pipeline.notice("hotkey toggle: recording=\(self.recorder.isRecording, privacy: .public) transcribing=\(self.isTranscribing, privacy: .public)")
+        if recorder.isRecording {
+            finishRecording()
+        } else {
+            startRecording()
+        }
+    }
+
+    private func startRecording() {
+        // 上一轮的识别/整理还没结束时忽略本次触发，避免串轮。
+        guard !isTranscribing else { return }
         guard Permissions.hasMicrophone else {
             lastError = "缺少麦克风权限，无法录音"
             Permissions.requestMicrophone { [weak self] _ in
@@ -399,27 +411,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             statusNote = nil
             armAutoStop()
             refreshStatusLine(recording: true)
+            capsule.setLevel(0)
+            capsule.show(.listening)
         } catch {
             lastError = "录音启动失败：\(error)"
             refreshStatusLine()
         }
     }
 
-    private func handlePushToTalkEnd() {
+    private func finishRecording() {
         cancelAutoStop()
         guard recorder.isRecording else { return }
         do {
             let (url, duration) = try recorder.stop()
             guard duration >= Config.minimumRecordingSeconds else {
                 try? FileManager.default.removeItem(at: url)
+                capsule.hide()
                 lastError = nil
                 refreshStatusLine()
                 return
             }
+            capsule.show(.transcribing)
             transcribeAndInsert(audioURL: url, duration: duration)
         } catch {
+            capsule.hide()
             lastError = "结束录音失败：\(error)"
             refreshStatusLine()
+        }
+    }
+
+    /// 把麦克风电平接到胶囊上；回调来自音频线程，这里切回主线程。
+    private func wireCapsule() {
+        recorder.onLevel = { [weak self] level in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.capsule.setLevel(level) }
+            }
         }
     }
 
@@ -430,7 +456,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             withTimeInterval: Config.maximumRecordingSeconds,
             repeats: false
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.handlePushToTalkEnd() }
+            MainActor.assumeIsolated { self?.finishRecording() }
         }
     }
 
@@ -458,6 +484,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } catch {
                 pipeline.error("transcribe failed: \(String(describing: error), privacy: .public)")
                 isTranscribing = false
+                capsule.hide()
                 lastError = "识别失败：\(error)"
                 refreshStatusLine()
             }
@@ -513,6 +540,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func finish(text: String, duration: TimeInterval) {
         isTranscribing = false
+        capsule.hide()
         guard !text.isEmpty else {
             pipeline.notice("finish: empty transcript, duration=\(duration, privacy: .public)s")
             lastError = "未识别到语音内容（\(duration.formatted(.number.precision(.fractionLength(1)))) 秒）"

@@ -1,21 +1,23 @@
 import CoreGraphics
 import Foundation
 
-/// 基于 CGEventTap 的「按住说话」热键监听。
+/// 基于 CGEventTap 的「按一下开始 / 再按一下结束」热键。
 ///
-/// 只监听 `flagsChanged`（修饰键按下/抬起），据此区分右 Option 的按下与松开。
+/// 触发条件：**Option + Command 同时按下**（左右 Option / 左右 Command 均可）。
+/// 只在一对键刚刚被同时按下时触发一次；按住不放不会连续触发。
+///
 /// 监听其他应用的键盘事件需要「输入监控」权限；缺失时 `start()` 返回 false。
+/// 用 `.listenOnly`，不消费事件，系统自带的 ⌘⌥ 快捷键不受影响。
 final class HotKeyMonitor {
-    private let onDown: () -> Void
-    private let onUp: () -> Void
+    private let onToggle: () -> Void
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
-    private var isPressed = false
+    /// 上一帧是否处于「组合键按下」状态，用于做边沿检测。
+    private var comboWasDown = false
 
-    init(onDown: @escaping () -> Void, onUp: @escaping () -> Void) {
-        self.onDown = onDown
-        self.onUp = onUp
+    init(onToggle: @escaping () -> Void) {
+        self.onToggle = onToggle
     }
 
     /// 回调在创建此 tap 的 run loop（主线程）上触发。
@@ -56,24 +58,27 @@ final class HotKeyMonitor {
         }
         tap = nil
         source = nil
-        isPressed = false
+        comboWasDown = false
     }
 
     private func handle(type: CGEventType, event: CGEvent) {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            // 被系统临时禁用期间可能漏掉了抬起事件，重置边沿状态避免卡在"已按下"。
+            comboWasDown = false
             return
         }
         guard type == .flagsChanged else { return }
-        guard event.getIntegerValueField(.keyboardEventKeycode) == Config.pushToTalkKeyCode else { return }
 
-        let pressed = event.flags.contains(.maskAlternate)
-        if pressed, !isPressed {
-            isPressed = true
-            onDown()
-        } else if !pressed, isPressed {
-            isPressed = false
-            onUp()
+        let flags = event.flags
+        let comboDown = flags.contains(.maskAlternate) && flags.contains(.maskCommand)
+
+        if comboDown {
+            guard !comboWasDown else { return }
+            comboWasDown = true
+            onToggle()
+        } else {
+            comboWasDown = false
         }
     }
 }
