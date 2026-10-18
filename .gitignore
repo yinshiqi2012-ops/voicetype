@@ -1,3 +1,7 @@
 .build/
 dist/
 .DS_Store
+
+# 模型权重与发布产物
+*.gguf
+dist/*.zip

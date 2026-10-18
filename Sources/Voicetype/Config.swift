@@ -75,10 +75,18 @@ enum Config {
         supportDirectory.appendingPathComponent("Models/ASR", isDirectory: true)
     }
 
-    /// 模型下载端点；空字符串表示使用 WhisperKit 默认（官方 huggingface.co）。
-    static var modelEndpoint: String? {
-        let value = UserDefaults.standard.string(forKey: "modelEndpoint") ?? defaultModelEndpoint
-        return value.isEmpty ? nil : value
+    /// 模型下载端点。
+    ///
+    /// 返回**有序候选列表**：先用户配置的端点（默认 hf-mirror），再依次回退到
+    /// hf-mirror 与官方 huggingface.co。官方端点在部分网络下不可达、镜像在
+    /// 海外也可能很慢，只配一个是装不上的。
+    /// 覆盖：`defaults write com.truman.voicetype modelEndpoint ""` 可跳过自定义项。
+    static var modelEndpoints: [String] {
+        let raw = UserDefaults.standard.string(forKey: "modelEndpoint") ?? defaultModelEndpoint
+        let configured = raw.isEmpty ? [] : [raw]
+        var seen = Set<String>()
+        return (configured + ["https://hf-mirror.com", "https://huggingface.co"])
+            .filter { seen.insert($0).inserted }
     }
 
     /// 默认识别语言。固定为中文，避免 Whisper 自动检测中文时偏向繁体输出。

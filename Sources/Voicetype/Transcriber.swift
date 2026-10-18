@@ -121,24 +121,29 @@ actor Transcriber {
         if FileManager.default.fileExists(atPath: destination.path) { return destination }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let endpoint = Config.modelEndpoint ?? "https://huggingface.co"
-        guard let url = URL(string: "\(endpoint)/\(remotePath)") else {
-            throw Failure.modelMissing(engine.rawValue)
-        }
+        try await download(remotePath: remotePath, to: destination, label: engine.rawValue)
+        return destination
+    }
 
-        var latest: Error = Failure.modelMissing(engine.rawValue)
-        for _ in 0..<2 {
-            do {
-                let (temporaryURL, response) = try await URLSession.shared.download(from: url)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-                guard (200..<300).contains(status) else {
-                    throw Failure.modelMissing("\(engine.rawValue) HTTP \(status)")
+    /// 按 `Config.modelEndpoints` 的顺序尝试下载：每个端点重试一次，失败换下一个。
+    /// 这样国内走 hf-mirror、海外回退 huggingface.co，两边都能装上。
+    private func download(remotePath: String, to destination: URL, label: String) async throws {
+        var latest: Error = Failure.modelMissing(label)
+        for endpoint in Config.modelEndpoints {
+            guard let url = URL(string: "\(endpoint)/\(remotePath)") else { continue }
+            for _ in 0..<2 {
+                do {
+                    let (temporaryURL, response) = try await URLSession.shared.download(from: url)
+                    let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                    guard (200..<300).contains(status) else {
+                        throw Failure.modelMissing("\(label) HTTP \(status)")
+                    }
+                    try? FileManager.default.removeItem(at: destination)
+                    try FileManager.default.moveItem(at: temporaryURL, to: destination)
+                    return
+                } catch {
+                    latest = error
                 }
-                try? FileManager.default.removeItem(at: destination)
-                try FileManager.default.moveItem(at: temporaryURL, to: destination)
-                return destination
-            } catch {
-                latest = error
             }
         }
         throw latest
@@ -162,7 +167,7 @@ actor Transcriber {
             let config = WhisperKitConfig(
                 model: Config.modelName,
                 downloadBase: Config.modelsDirectory,
-                modelEndpoint: Config.modelEndpoint,
+                modelEndpoint: Config.modelEndpoints.first,
                 modelFolder: localFolder?.path,
                 verbose: false,
                 prewarm: true,
@@ -207,35 +212,13 @@ actor Transcriber {
         if targets.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) { return }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let endpoint = Config.modelEndpoint ?? "https://huggingface.co"
-
         for file in Self.tokenizerFiles {
-            try await downloadTokenizer(file, from: endpoint, into: directory)
+            try await download(
+                remotePath: "\(Config.tokenizerRepo)/resolve/main/\(file)",
+                to: directory.appendingPathComponent(file),
+                label: file
+            )
         }
-    }
-
-    private func downloadTokenizer(_ file: String, from endpoint: String, into directory: URL) async throws {
-        guard let url = URL(string: "\(endpoint)/\(Config.tokenizerRepo)/resolve/main/\(file)") else {
-            throw Failure.tokenizerDownloadFailed(file)
-        }
-
-        var latest: Error = Failure.tokenizerDownloadFailed(file)
-        for _ in 0..<2 {
-            do {
-                let (temporaryURL, response) = try await URLSession.shared.download(from: url)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-                guard (200..<300).contains(status) else {
-                    throw Failure.tokenizerDownloadFailed("\(file) HTTP \(status)")
-                }
-                let destination = directory.appendingPathComponent(file)
-                try? FileManager.default.removeItem(at: destination)
-                try FileManager.default.moveItem(at: temporaryURL, to: destination)
-                return
-            } catch {
-                latest = error
-            }
-        }
-        throw latest
     }
 
     // MARK: - 音频
