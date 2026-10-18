@@ -103,7 +103,7 @@ final class ListeningCapsule {
 
 /// 胶囊的绘制层：半透明深色底 + 随音量跳动的波形 + 一行说明文字。
 private final class CapsuleCanvas: NSView {
-    static let preferredSize = NSSize(width: 108, height: 24)
+    static let preferredSize = NSSize(width: 128, height: 34)
 
     var targetLevel: CGFloat = 0
 
@@ -171,15 +171,15 @@ private final class CapsuleCanvas: NSView {
         path.stroke()
 
         // 波形
-        let barWidth: CGFloat = 2
-        let gap: CGFloat = 2
+        let barWidth: CGFloat = 3
+        let gap: CGFloat = 3
         let totalWidth = CGFloat(smoothed.count) * barWidth + CGFloat(smoothed.count - 1) * gap
         let wavesLeft: CGFloat = 10
         let midY = capsule.midY
-        let maxHeight = capsule.height - 9
+        let maxHeight = capsule.height - 12
 
         for (index, level) in smoothed.enumerated() {
-            let height = max(2, maxHeight * level)
+            let height = max(3, maxHeight * level)
             let rect = NSRect(
                 x: wavesLeft + CGFloat(index) * (barWidth + gap),
                 y: midY - height / 2,
@@ -202,13 +202,13 @@ private final class CapsuleCanvas: NSView {
         case .transcribing: text = "正在识别…"
         }
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 9.5, weight: .medium),
+            .font: NSFont.systemFont(ofSize: 14.25, weight: .medium),
             .foregroundColor: NSColor(calibratedWhite: 0.95, alpha: 0.92),
         ]
         let attributed = NSAttributedString(string: text, attributes: attributes)
         let textSize = attributed.size()
         let textOrigin = NSPoint(
-            x: wavesLeft + totalWidth + 8,
+            x: wavesLeft + totalWidth + 9,
             y: midY - textSize.height / 2
         )
         attributed.draw(at: textOrigin)
