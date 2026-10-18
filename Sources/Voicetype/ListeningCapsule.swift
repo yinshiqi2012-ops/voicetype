@@ -111,8 +111,9 @@ private final class CapsuleCanvas: NSView {
         didSet { if state != oldValue { needsDisplay = true } }
     }
 
-    /// 每个柱子的相位偏移，让波形看起来自然而不是整齐划一。
-    private let barPhases: [CGFloat] = [0.0, 0.55, 0.25, 0.8, 0.4]
+    /// 相邻柱子的相位差。取 1.1 弧度让 5 根柱子上正好铺开一个波峰和一个波谷，
+    /// 静止时也能看出这是一道起伏的"波浪"，而不是一排等高的圆点。
+    private let barPhaseStep: CGFloat = 1.1
     private var smoothed: [CGFloat]
     private var phase: CGFloat = 0
     private var timer: Timer?
@@ -141,20 +142,24 @@ private final class CapsuleCanvas: NSView {
     }
 
     private func tick() {
+        // 窗口不可见时不做任何计算，避免常驻 60fps 空转。
+        guard let window, window.isVisible, window.alphaValue > 0 else { return }
+
         phase += 0.14
         for index in smoothed.indices {
-            // 目标值 = 音量 × 每根柱子的固定权重，再叠一点相位摆动模拟真实频谱。
-            let weight = 0.55 + 0.45 * abs(sin(phase * 0.6 + barPhases[index] * .pi))
-            let target = state == .listening
-                ? max(0.10, targetLevel * weight)
-                : 0.10
+            let columnPhase = CGFloat(index) * barPhaseStep
+            let swing = sin(phase * 0.9 + columnPhase)
+            // 静音时也保留一道起伏的波形（0.24…0.44），
+            // 否则每根柱子都塌到最小高度，看起来像五个圆点而不是"在聆听"。
+            let idleWave: CGFloat = 0.34 + 0.10 * swing
+            // 说话时叠加音量：每根柱子权重不同，形成频谱错落。
+            let active = targetLevel * (0.55 + 0.45 * abs(sin(phase * 0.6 + columnPhase)))
+            let target: CGFloat = state == .listening ? max(idleWave, active) : 0.14
             // 上升快、回落慢，观感更接近电平表。
             let factor: CGFloat = target > smoothed[index] ? 0.45 : 0.12
             smoothed[index] += (target - smoothed[index]) * factor
         }
-        if state == .listening || targetLevel > 0 || smoothed.contains(where: { $0 > 0.12 }) {
-            needsDisplay = true
-        }
+        needsDisplay = true
     }
 
     override func draw(_ dirtyRect: NSRect) {

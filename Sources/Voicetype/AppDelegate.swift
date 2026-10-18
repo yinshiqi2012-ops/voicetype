@@ -34,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var lastSource: String?
     private var lastPolished: String?
     private var autoStopArmed = false
+    /// 本轮录音观察到的最大电平，用于确认麦克风数据确实驱动到了胶囊。
+    private var peakLevel: Float = 0
 
     // MARK: - 生命周期
 
@@ -411,6 +413,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             statusNote = nil
             armAutoStop()
             refreshStatusLine(recording: true)
+            peakLevel = 0
             capsule.setLevel(0)
             capsule.show(.listening)
         } catch {
@@ -444,7 +447,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func wireCapsule() {
         recorder.onLevel = { [weak self] level in
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.capsule.setLevel(level) }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.peakLevel = max(self.peakLevel, level)
+                    self.capsule.setLevel(level)
+                }
             }
         }
     }
@@ -550,7 +557,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let accessibility = Permissions.hasAccessibility
         let postEvents = Permissions.canPostEvents
-        pipeline.notice("finish: chars=\(text.count, privacy: .public) accessibility=\(accessibility, privacy: .public) postEvents=\(postEvents, privacy: .public)")
+        pipeline.notice("finish: chars=\(text.count, privacy: .public) peakLevel=\(self.peakLevel, privacy: .public) accessibility=\(accessibility, privacy: .public) postEvents=\(postEvents, privacy: .public)")
 
         guard accessibility, postEvents else {
             copyToClipboard(text)
