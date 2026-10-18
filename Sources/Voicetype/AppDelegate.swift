@@ -60,6 +60,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             capsule.show(.listening)
             capsule.hide(after: 5)
         }
+
+        // 文档截图用：自动弹出菜单，外部截完图按 Esc 关闭后进程即退出。
+        if ProcessInfo.processInfo.environment["VOICETYPE_PREVIEW_MENU"] == "1" {
+            Task { [weak self] in
+                // 等模型和 Ollama 状态都确定下来再弹菜单，截图里才不会出现"准备中/检查中"。
+                for _ in 0..<60 {
+                    guard let self, !self.isModelReady else { break }
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                }
+                if let self {
+                    let line = await self.polisher.statusLine()
+                    self.polishModelLine?.title = line
+                    self.refreshStatusLine()
+                }
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                guard let self, let button = self.statusItem?.button else { return }
+                // 走 button.performClick 而不是 NSMenu.popUp：后者在非活跃应用里
+                // 会立刻被系统收掉，截不到图。performClick 等价于真实鼠标点击菜单栏图标。
+                // 激活动作会合成一个 flagsChanged，可能被当成 Option+Command 触发录音。
+                // 截图流程里先停掉监听，避免菜单状态显示成"正在录音"。
+                self.monitor?.stop()
+                self.monitor = nil
+                NSApp.activate(ignoringOtherApps: true)
+                button.performClick(nil)
+                // 菜单被 Esc 关掉后走到这里；用 _exit 跳过 ggml 静态析构。
+                _exit(0)
+            }
+        }
     }
 
     /// 让最新启动的进程独占运行，避免重复注入文本。

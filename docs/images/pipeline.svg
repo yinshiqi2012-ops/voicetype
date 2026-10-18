@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="380" viewBox="0 0 1180 380" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#8b93a1"/></marker></defs>
+<rect width="1180" height="380" fill="#ffffff"/>
+<rect x="24" y="96" width="1132" height="196" rx="20" fill="#f7f8fa" stroke="#d7dbe3" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="48" y="128" font-size="17" fill="#6b7280" font-weight="600">全程在本机完成，音频与文字都不出网</text>
+<rect x="60" y="160" width="232" height="132" rx="16" fill="#eef2ff" stroke="#c7d2fe" stroke-width="2"/>
+<text x="176.0" y="200" text-anchor="middle" font-size="25" font-weight="700" fill="#3730a3">麦克风</text>
+<text x="176.0" y="232" text-anchor="middle" font-size="15" fill="#4b5563">AVAudioEngine</text>
+<text x="176.0" y="262" text-anchor="middle" font-size="14" fill="#6b7280">16kHz 单声道 WAV</text>
+<line x1="298" y1="226" x2="328" y2="226" stroke="#8b93a1" stroke-width="2.5" marker-end="url(#a)"/>
+<rect x="336" y="160" width="232" height="132" rx="16" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="2"/>
+<text x="452.0" y="200" text-anchor="middle" font-size="25" font-weight="700" fill="#065f46">Qwen3-ASR</text>
+<text x="452.0" y="232" text-anchor="middle" font-size="15" fill="#4b5563">transcribe.cpp · ggml</text>
+<text x="452.0" y="262" text-anchor="middle" font-size="14" fill="#6b7280">0.57 秒 / 35 秒语音</text>
+<line x1="574" y1="226" x2="604" y2="226" stroke="#8b93a1" stroke-width="2.5" marker-end="url(#a)"/>
+<rect x="612" y="160" width="232" height="132" rx="16" fill="#fff7ed" stroke="#fed7aa" stroke-width="2"/>
+<text x="728.0" y="200" text-anchor="middle" font-size="25" font-weight="700" fill="#9a3412">本地 LLM 整理</text>
+<text x="728.0" y="232" text-anchor="middle" font-size="15" fill="#4b5563">Ollama · qwen3.5</text>
+<text x="728.0" y="262" text-anchor="middle" font-size="14" fill="#6b7280">删口头禅、改口、补标点</text>
+<line x1="850" y1="226" x2="880" y2="226" stroke="#8b93a1" stroke-width="2.5" marker-end="url(#a)"/>
+<rect x="888" y="160" width="232" height="132" rx="16" fill="#f5f3ff" stroke="#ddd6fe" stroke-width="2"/>
+<text x="1004.0" y="200" text-anchor="middle" font-size="25" font-weight="700" fill="#5b21b6">写入光标</text>
+<text x="1004.0" y="232" text-anchor="middle" font-size="15" fill="#4b5563">CGEvent</text>
+<text x="1004.0" y="262" text-anchor="middle" font-size="14" fill="#6b7280">不抢焦点，失败转剪贴板</text>
+<text x="60" y="330" font-size="16" fill="#4b5563">热键</text>
+<text x="112" y="330" font-size="16" font-weight="700" fill="#111827">Option + Command</text>
+<text x="300" y="330" font-size="16" fill="#4b5563">按一下开始，再按一次结束 —— 不占用单键，不和输入法抢键</text>
+<text x="60" y="356" font-size="15" fill="#9ca3af">唯一的网络访问只发生在首次下载模型权重时；此后断网也能用。</text>
+</svg>

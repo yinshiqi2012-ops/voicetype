@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="690" viewBox="0 0 980 690" font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<rect width="980" height="690" fill="#ffffff"/>
+<text x="28" y="42" font-size="24" font-weight="700" fill="#111827">中文识别准确率实测</text>
+<text x="28" y="72" font-size="15" fill="#6b7280">FLEURS-zh 945 条语料 · 字符错误率 CER（越低越好）· 权重统一 Q8_0 · M5 Pro</text>
+<line x1="324.0" y1="102" x2="324.0" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="324.0" y="626" text-anchor="middle" font-size="13" fill="#9ca3af">0%</text>
+<line x1="426.0" y1="102" x2="426.0" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="426.0" y="626" text-anchor="middle" font-size="13" fill="#9ca3af">5%</text>
+<line x1="528.0" y1="102" x2="528.0" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="528.0" y="626" text-anchor="middle" font-size="13" fill="#9ca3af">10%</text>
+<line x1="630.0" y1="102" x2="630.0" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="630.0" y="626" text-anchor="middle" font-size="13" fill="#9ca3af">15%</text>
+<line x1="732.0" y1="102" x2="732.0" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="732.0" y="626" text-anchor="middle" font-size="13" fill="#9ca3af">20%</text>
+<line x1="834.0" y1="102" x2="834.0" y2="600" stroke="#e5e7eb" stroke-width="1"/>
+<text x="834.0" y="626" text-anchor="middle" font-size="13" fill="#9ca3af">25%</text>
+<text x="28" y="134" font-size="17" font-weight="600" fill="#111827">Qwen3-ASR 1.7B</text>
+<text x="28" y="154" font-size="13" fill="#9ca3af">延迟 977ms · 权重 2.2GB</text>
+<rect x="324" y="120" width="145.7" height="30" rx="7" fill="#34d399"/>
+<text x="479.7" y="142" font-size="16" font-weight="600" fill="#374151">7.14</text>
+<text x="28" y="196" font-size="17" font-weight="600" fill="#065f46">Qwen3-ASR 0.6B</text>
+<text x="28" y="216" font-size="13" fill="#9ca3af">延迟 574ms · 权重 850MB</text>
+<rect x="324" y="182" width="154.4" height="30" rx="7" fill="#10b981"/>
+<text x="488.4" y="204" font-size="16" font-weight="600" fill="#374151">7.57</text>
+<text x="28" y="258" font-size="17" font-weight="600" fill="#111827">Whisper large-v3</text>
+<text x="28" y="278" font-size="13" fill="#9ca3af">延迟 — · 权重 3.1GB</text>
+<rect x="324" y="244" width="162.8" height="30" rx="7" fill="#94a3b8"/>
+<text x="496.8" y="266" font-size="16" font-weight="600" fill="#374151">7.98</text>
+<text x="28" y="320" font-size="17" font-weight="600" fill="#111827">Breeze-ASR-25</text>
+<text x="28" y="340" font-size="13" fill="#9ca3af">延迟 1481ms · 权重 1.5GB</text>
+<rect x="324" y="306" width="165.2" height="30" rx="7" fill="#94a3b8"/>
+<text x="499.2" y="328" font-size="16" font-weight="600" fill="#374151">8.10</text>
+<text x="28" y="382" font-size="17" font-weight="600" fill="#111827">Whisper large-v3-turbo</text>
+<text x="28" y="402" font-size="13" fill="#9ca3af">延迟 — · 权重 1.6GB</text>
+<rect x="324" y="368" width="173.4" height="30" rx="7" fill="#94a3b8"/>
+<text x="507.4" y="390" font-size="16" font-weight="600" fill="#374151">8.50</text>
+<text x="28" y="444" font-size="17" font-weight="600" fill="#111827">Fun-ASR-Nano</text>
+<text x="28" y="464" font-size="13" fill="#9ca3af">延迟 — · 权重 —</text>
+<rect x="324" y="430" width="175.2" height="30" rx="7" fill="#94a3b8"/>
+<text x="509.2" y="452" font-size="16" font-weight="600" fill="#374151">8.59</text>
+<text x="28" y="506" font-size="17" font-weight="600" fill="#111827">SenseVoice-Small</text>
+<text x="28" y="526" font-size="13" fill="#9ca3af">延迟 130ms · 权重 470MB</text>
+<rect x="324" y="492" width="206.4" height="30" rx="7" fill="#94a3b8"/>
+<text x="540.4" y="514" font-size="16" font-weight="600" fill="#374151">10.12</text>
+<text x="28" y="568" font-size="17" font-weight="600" fill="#111827">Whisper small</text>
+<text x="28" y="588" font-size="13" fill="#9ca3af">延迟 401ms · 权重 480MB</text>
+<rect x="324" y="554" width="470.4" height="30" rx="7" fill="#f87171"/>
+<text x="804.4" y="576" font-size="16" font-weight="600" fill="#374151">23.06</text>
+<text x="28" y="668" font-size="14" fill="#9ca3af">绿色为本项目默认与可选模型；红色是修复前的默认（Whisper small），错误率是现在的 3 倍。</text>
+</svg>
