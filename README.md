@@ -25,7 +25,7 @@
 需要 macOS 14+、Xcode Command Line Tools（Swift 6）。**不需要装 cmake**——原生推理库已随仓库提供。
 
 ```bash
-git clone https://github.com/<your-name>/voicetype.git
+git clone https://github.com/yinshiqi2012-ops/voicetype.git
 cd voicetype
 ./scripts/build-app.sh
 open dist/Voicetype.app
