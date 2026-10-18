@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let recorder = Recorder()
     private let capsule = ListeningCapsule()
     private let polisher = SpeechPolisher()
+    private let usage = UsageStats()
     private var monitor: HotKeyMonitor?
 
     private var statusItem: NSStatusItem?
@@ -21,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var polishModelLine: NSMenuItem?
     private var polishModeItems: [PolishMode: NSMenuItem] = [:]
     private var compareItem: NSMenuItem?
+    private var usageMenu: NSMenuItem?
     private var asrEngineMenu: NSMenuItem?
     private var asrEngineItems: [ASREngine: NSMenuItem] = [:]
 
@@ -36,10 +38,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var autoStopArmed = false
     /// 本轮录音观察到的最大电平，用于确认麦克风数据确实驱动到了胶囊。
     private var peakLevel: Float = 0
+    /// 是否加载过 ggml（transcribe.cpp）权重，决定退出时要不要绕过静态析构。
+    private var ggmlModelLoaded = false
 
     // MARK: - 生命周期
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 调试口要先跑：它只读或写统计文件，不该顺手把正在运行的实例关掉。
+        handleDebugHooks()
+        // 双开会让两个进程同时抓 Option+Command，各录一遍、各插一遍，
+        // 表现就是"同一句话出来两段差不多的文字"。新进程负责收掉旧进程。
+        enforceSingleInstance()
         setUpStatusItem()
         setUpHotKey()
         requestMissingPermissions()
@@ -53,17 +62,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// 让最新启动的进程独占运行，避免重复注入文本。
+    private func enforceSingleInstance() {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return }
+        let older = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            .filter { $0.processIdentifier != getpid() && $0.processIdentifier < getpid() }
+        guard !older.isEmpty else { return }
+        pipeline.notice("single instance: 关闭 \(older.count, privacy: .public) 个旧实例")
+        for app in older { app.terminate() }
+        // 热键监听要先等旧进程真的退出，否则两边会同时抢到事件。
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline, older.contains(where: { !$0.isTerminated }) {
+            usleep(50_000)
+        }
+    }
+
+    /// 命令行调试口：不进菜单，只给排障用。
+    private func handleDebugHooks() {
+        let env = ProcessInfo.processInfo.environment
+        if let raw = env["VOICETYPE_DEBUG_RECORD"], let chars = Int(raw) {
+            usage.record(chars: chars)
+            print(usageSummary())
+            exit(0)
+        }
+        if env["VOICETYPE_PRINT_USAGE"] == "1" {
+            print(usageSummary())
+            exit(0)
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         cancelAutoStop()
         monitor?.stop()
-        // ggml-metal 要求退出前释放 GPU 资源，否则可能在 teardown 时断言。
-        // 退出路径是同步的，这里最多等 1 秒把权重放掉。
+        // ggml-metal 要求退出前释放 GPU 资源。先把权重放掉，最多等 1 秒。
         let released = DispatchSemaphore(value: 0)
         Task {
             await transcriber.unload()
             released.signal()
         }
         _ = released.wait(timeout: .now() + 1)
+
+        // 已加载过 ggml 权重时，正常 exit 会在 C++ 静态析构里断言
+        // `GGML_ASSERT([rsets->data count] == 0) failed` → 进程 abort、每次退出留一份崩溃报告。
+        // 该断言发生在静态析构阶段，Swift 侧无法补救，只能跳过析构直接结束进程。
+        // 统计文件每笔都是原子写、识别结果此刻已全部落盘，_exit 不会丢数据。
+        if ggmlModelLoaded {
+            pipeline.notice("terminate: 跳过 ggml 静态析构，避免 Metal 断言")
+            _exit(0)
+        }
     }
 
     // MARK: - 菜单栏
@@ -144,6 +190,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         compareItem = compare
 
         refreshPolishMenu()
+
+        let usageItem = NSMenuItem(title: "用量统计", action: nil, keyEquivalent: "")
+        usageItem.submenu = NSMenu()
+        menu.addItem(usageItem)
+        usageMenu = usageItem
+        rebuildUsageMenu()
 
         let loginItem = NSMenuItem(
             title: "开机自启动",
@@ -282,6 +334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let started = Date()
                 try await transcriber.load()
                 isModelReady = true
+                ggmlModelLoaded = Config.asrEngine.usesGGML
                 pipeline.notice("asr ready: engine=\(Config.asrEngine.rawValue, privacy: .public) in \(Date().timeIntervalSince(started), privacy: .public)s")
                 // 只有热键监听已建立时才清错误，否则会把启动时的权限错误抹掉。
                 if monitor != nil {
@@ -347,6 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             do {
                 try await transcriber.reload()
                 isModelReady = true
+                ggmlModelLoaded = Config.asrEngine.usesGGML
                 if monitor != nil { lastError = nil }
             } catch {
                 pipeline.error("asr load failed: \(String(describing: error), privacy: .public)")
@@ -365,6 +419,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         refreshPolishMenu()
+        rebuildUsageMenu()
         Task {
             let line = await polisher.statusLine()
             polishModelLine?.title = line
@@ -555,6 +610,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
+        // 只要产生了输出就计入统计（插入成功或退化成剪贴板都算）。
+        usage.record(chars: text.count)
+
         let accessibility = Permissions.hasAccessibility
         let postEvents = Permissions.canPostEvents
         pipeline.notice("finish: chars=\(text.count, privacy: .public) peakLevel=\(self.peakLevel, privacy: .public) accessibility=\(accessibility, privacy: .public) postEvents=\(postEvents, privacy: .public)")
@@ -584,5 +642,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func copyToClipboard(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    // MARK: - 用量统计
+
+    private func infoItem(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
+    }
+
+    /// 菜单每次展开都重算，保证数字是"打开这一刻"的实时值。
+    private func rebuildUsageMenu() {
+        guard let submenu = usageMenu?.submenu else { return }
+        let hour = usage.chars(inLast: 3600)
+        let rollingDay = usage.chars(inLast: 24 * 3600)
+        let today = usage.todayChars
+        let week = usage.chars(lastDays: 7)
+        let month = usage.chars(lastDays: 30)
+        let total = usage.totalChars
+
+        submenu.removeAllItems()
+        submenu.addItem(infoItem("最近 1 小时：\(UsageStats.format(hour)) 字"))
+        submenu.addItem(infoItem("最近 24 小时：\(UsageStats.format(rollingDay)) 字"))
+        submenu.addItem(infoItem("今天：\(UsageStats.format(today)) 字"))
+        submenu.addItem(infoItem("近 7 天（按自然日）：\(UsageStats.format(week)) 字"))
+        submenu.addItem(infoItem("近 30 天（按自然日）：\(UsageStats.format(month)) 字"))
+        submenu.addItem(infoItem("历史累计：\(UsageStats.format(total)) 字"))
+
+        // 每日明细：最近 14 天，够看出习惯也能塞进菜单。
+        submenu.addItem(.separator())
+        let daily = NSMenuItem(title: "每日明细（近 14 天）", action: nil, keyEquivalent: "")
+        let dailyMenu = NSMenu()
+        for row in usage.dailyTotals(lastDays: 14) {
+            let label = UsageStats.dayLabel(for: row.date)
+            dailyMenu.addItem(infoItem("\(label)　\(UsageStats.format(row.chars)) 字"))
+        }
+        daily.submenu = dailyMenu
+        submenu.addItem(daily)
+
+        submenu.addItem(.separator())
+        let copy = NSMenuItem(title: "复制统计摘要", action: #selector(copyUsageSummary), keyEquivalent: "")
+        copy.target = self
+        submenu.addItem(copy)
+
+        usageMenu?.title = "用量统计：今天 \(UsageStats.format(today)) 字"
+    }
+
+    @objc private func copyUsageSummary() {
+        copyToClipboard(usageSummary())
+        lastError = nil
+        statusNote = "统计摘要已复制到剪贴板"
+        refreshStatusLine()
+    }
+
+    /// 纯文本摘要，菜单复制和命令行调试共用同一份格式。
+    private func usageSummary() -> String {
+        let stamp = Date().formatted(date: .numeric, time: .shortened)
+        var lines = [
+            "voicetype 输出字数统计",
+            "统计时间：\(stamp)",
+            "最近 1 小时：\(UsageStats.format(usage.chars(inLast: 3600))) 字",
+            "最近 24 小时：\(UsageStats.format(usage.chars(inLast: 24 * 3600))) 字",
+            "今天：\(UsageStats.format(usage.todayChars)) 字",
+            "近 7 天（按自然日）：\(UsageStats.format(usage.chars(lastDays: 7))) 字",
+            "近 30 天（按自然日）：\(UsageStats.format(usage.chars(lastDays: 30))) 字",
+            "历史累计：\(UsageStats.format(usage.totalChars)) 字",
+            "",
+            "每日明细（近 14 天）：",
+        ]
+        for row in usage.dailyTotals(lastDays: 14) {
+            lines.append("\(UsageStats.dayLabel(for: row.date))　\(UsageStats.format(row.chars)) 字")
+        }
+        return lines.joined(separator: "\n")
     }
 }

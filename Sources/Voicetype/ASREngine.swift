@@ -30,6 +30,11 @@ enum ASREngine: String, CaseIterable, Sendable {
         }
     }
 
+    /// 是否走 transcribe.cpp（ggml/Metal）。ggml 权重在进程退出时需要特殊处理。
+    var usesGGML: Bool {
+        self != .whisperSmall
+    }
+
     /// GGUF 权重文件名；`nil` 表示不用 transcribe.cpp（走 WhisperKit）。
     var ggufFileName: String? {
         switch self {

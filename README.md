@@ -15,7 +15,8 @@
 - **文字直接写进光标处**：走 CGEvent，不抢焦点、不切窗口；投递失败会退化为复制到剪贴板，绝不丢话。
 - **会整理，不照抄**：默认删口头禅、重复和改口，补标点。「插入原文」和「总结成要点」也在菜单里可以切换。
 - **有事实兜底**：整理结果里数字或时间被改写/丢失时，直接回退原文——宁可不动，不能改错。
-- **录音时有指示**：屏幕底部出现一个小胶囊，波形跟着你的音量跳动。
+- **录音时有指示**：屏幕底部出现一个小胶囊，波形跟着你的音量跳动（静音时也有一道呼吸波形，不会看起来像卡死）。
+- **字数统计**：菜单栏「用量统计」实时显示最近 1 小时 / 24 小时 / 今天 / 近 7 天 / 近 30 天 / 历史累计，附近 14 天每日明细，可一键复制摘要。
 - **菜单栏常驻**，没有 Dock 图标，不打断工作。
 
 ## 安装
@@ -121,6 +122,8 @@ defaults write com.truman.voicetype modelEndpoint "https://huggingface.co"
 | 整理没生效 | Ollama 没运行，或没 `ollama pull` 对应模型；菜单「整理模型」那行会说明 |
 | 识别很慢（十几秒） | 模型被换出内存。用 `ollama ps` 看常驻；整理模式设为「插入原文」则不加载 |
 | 首次启动卡住 | 在下载模型（811MB 或 2.0GB），看菜单状态行 |
+| 一句话出来两遍 | 同时开了两个实例（比如 `dist/` 里那份和 `/Applications` 那份）。打开新实例时会自动关掉旧的，日志里有 `single instance: 关闭 1 个旧实例` |
+| 退出时弹「意外退出」 | 旧版本遗留；ggml 的 Metal 静态析构会断言，新版退出时跳过析构，不再产生崩溃报告 |
 
 调试日志：
 
@@ -140,12 +143,23 @@ defaults write com.truman.voicetype modelEndpoint "https://huggingface.co"
 defaults write com.truman.voicetype language    ""                # 空 = 自动检测，默认固定 zh
 ```
 
+字数统计可以命令行查看/清空：
+
+```bash
+# 直接打印统计（不启动界面）
+/Applications/Voicetype.app/Contents/MacOS/voicetype  # 加环境变量 VOICETYPE_PRINT_USAGE=1
+VOICETYPE_PRINT_USAGE=1 /Applications/Voicetype.app/Contents/MacOS/voicetype
+
+# 清空统计
+rm "~/Library/Application Support/voicetype/usage.json"
+```
+
 ## 隐私
 
 - 语音和文字**不离开本机**。唯一的网络请求是下载模型权重。
 - 录音保存在 `~/Library/Application Support/voicetype/Recordings/`，不会自动清理。
 - 整理请求发往 `127.0.0.1:11434`（本机 Ollama），不经过任何服务器。
-- 应用不上报任何统计数据。
+- 字数统计只存在 `~/Library/Application Support/voicetype/usage.json`，是一份本地 JSON，不上报。
 
 ## 结构
 
@@ -160,6 +174,7 @@ Sources/Voicetype/
 ├── TranscriptCleanup.swift  整理提示词、输出清洗、数字/时间事实校验
 ├── TextInjector.swift       CGEvent 把文字写进光标
 ├── ListeningCapsule.swift   屏幕底部浮动胶囊
+├── UsageStats.swift         输出字数统计（每日桶 + 48 小时明细，原子写盘）
 ├── Permissions.swift        三类系统权限
 ├── LoginItem.swift          开机自启
 └── Config.swift             所有默认值与可覆盖项
@@ -167,6 +182,7 @@ Sources/Voicetype/
 Vendor/transcribe-cpp/       vendored 的 transcribe.cpp Swift 绑定（MIT）
 scripts/build-app.sh         构建 .app（含框架嵌入与签名）
 scripts/package-release.sh   打 zip 发布包
+Tests/VoicetypeTests/        TranscriptCleanup 与 UsageStats 的单元测试
 ```
 
 ## 许可

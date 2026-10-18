@@ -112,6 +112,11 @@ enum Config {
         supportDirectory.appendingPathComponent("Models", isDirectory: true)
     }
 
+    /// 输出字数统计的落地文件。
+    static var usageFileURL: URL {
+        supportDirectory.appendingPathComponent("usage.json")
+    }
+
     /// tokenizer 仓库 id，由模型名推导（`openai_whisper-small` → `openai/whisper-small`）。
     static var tokenizerRepo: String {
         modelName.replacingOccurrences(of: "_", with: "/")
