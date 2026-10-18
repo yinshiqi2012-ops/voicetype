@@ -19,7 +19,7 @@ VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionStri
 OUT="$ROOT/dist/voicetype-$VERSION-macos.zip"
 
 echo "==> 构建 app"
-./scripts/build-app.sh > /dev/null
+VERSION="$VERSION" ./scripts/build-app.sh > /dev/null
 
 echo "==> 打包 $OUT"
 rm -f "$OUT"

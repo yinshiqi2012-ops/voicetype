@@ -291,12 +291,29 @@ Tests/VoicetypeTests/        TranscriptCleanup 与 UsageStats 的单元测试
 
 ## 开发
 
+需要 macOS 14+、Xcode Command Line Tools。**不需要 cmake**——原生推理库以 xcframework 随仓库分发。
+
 ```bash
-swift build --disable-automatic-resolution   # 首次构建需要网络拉 WhisperKit
+# 首次构建要联网：从 GitHub 拉 WhisperKit 与 swift-argument-parser
+swift build
+
+# 想让构建严格按 Package.resolved 走、不再去解析新版本（CI / 离线复用缓存时有用）
+swift build --disable-automatic-resolution
+
 swift test                                   # 13 个单元测试
-./scripts/build-app.sh                       # 构建可运行的 .app
-VERSION=0.2.1 ./scripts/package-release.sh   # 打发布 zip
+./scripts/build-app.sh                       # 真正的入口：产出 dist/Voicetype.app
+VERSION=0.2.1 ./scripts/package-release.sh   # 版本号写进 bundle，并打 dist/voicetype-0.2.1-macos.zip
 ```
+
+关于依赖，有三点实测出来容易踩：
+
+- **`--disable-automatic-resolution` 不是必需的**。`Package.resolved` 已入库、版本是锁定的；不带这个参数时 SwiftPM 仍可能顺手把依赖解析到新的补丁版（实测冷缓存下自行选到了 WhisperKit 1.1.1），带它则严格按锁文件走。日常构建加不加都行，CI 里建议加上。
+- **耗时取决于 SPM 缓存**，不是这个参数。依赖仓库缓存在 `~/Library/Caches/org.swift.swiftpm`：有缓存时一次完整构建约 **9 秒**；冷缓存则必须联网拉 WhisperKit 那几个仓库，网络不通会卡在 `Fetching …` 上直到超时，可以先给 git 配代理：
+  ```bash
+  git config --global http.proxy http://127.0.0.1:7890   # 换成你自己的端口
+  ```
+- **`swift build` 只编译可执行文件**，`.app` 的组装（图标、Info.plist、嵌入 `CTranscribe.framework`、补 `@executable_path/../Frameworks` 的 rpath、签名）全在 `scripts/build-app.sh` 里。日常用后者，前者只在你想单独验证编译时用。
+- `VERSION=…` 只改打出来的这个 bundle 与 zip 文件名，**不会**动源码里的 `Resources/Info.plist`。
 
 几个调试开关（都不进菜单，只给排障用）：
 

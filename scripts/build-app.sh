@@ -26,6 +26,12 @@ echo "==> 组装 $BUNDLE"
 rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
 cp "$ROOT/Resources/Info.plist" "$BUNDLE/Contents/Info.plist"
+
+# VERSION 只覆盖「打出来的这个 bundle」，不动源码里的 Info.plist，
+# 这样 VERSION=0.2.1 ./scripts/package-release.sh 打出的包版本号是真的 0.2.1。
+if [ -n "${VERSION:-}" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$BUNDLE/Contents/Info.plist"
+fi
 cp "$ROOT/Resources/AppIcon.icns" "$BUNDLE/Contents/Resources/AppIcon.icns"
 cp "$BIN_PATH" "$BUNDLE/Contents/MacOS/$APP_NAME"
 
