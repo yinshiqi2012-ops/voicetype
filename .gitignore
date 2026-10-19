@@ -5,3 +5,8 @@ dist/
 # 模型权重与发布产物
 *.gguf
 dist/*.zip
+
+# 环境变量（只提交 .env.example 模板）
+.env
+.env.*
+!.env.example
